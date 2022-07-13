@@ -1,0 +1,12 @@
+services:
+  terraria:
+    image: beardedio/terraria:vanilla-latest
+    ports:
+      - 5555:5555
+    restart: unless-stopped
+    environment:
+      - world=Maynooth_World.wld
+    volumes:
+      - /root/OneDrive/Servers/Terraria:/config
+    tty: true
+    stdin_open: true

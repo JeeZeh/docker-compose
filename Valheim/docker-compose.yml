@@ -1,0 +1,21 @@
+version: "3"
+services:
+  valheim_contabo:
+    container_name: valheim
+    image: lloesche/valheim-server:latest
+    restart: unless-stopped
+    mem_limit: 8000m
+    ports:
+      - 2456:2456/udp
+      - 2457:2457/udp
+      - 2458:2458/udp
+    environment:
+      - SERVER_NAME=JnF NG+
+      - WORLD_NAME=jnfngp
+      - SERVER_PASS=#OMITTED
+      - TZ=Europe/Dublin
+      - BACKUPS_MAX_AGE=7
+      - BACKUPS_DIRECTORY=/backup
+    volumes:
+      - ~/valheim/config:/config
+      - ~/OneDrive/Servers/Valheim:/backup
