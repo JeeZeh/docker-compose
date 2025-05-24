@@ -1,0 +1,92 @@
+name: home-network
+services:
+  # Adblocking, DHCP, and more.
+  pihole:
+    image: pihole/pihole:latest
+    container_name: pihole
+    hostname: pihole
+    network_mode: 'host'
+    environment:
+      # Set the appropriate timezone for your location (https://en.wikipedia.org/wiki/List_of_tz_database_time_zones), e.g:
+      TZ: 'Europe/Dublin'
+      PROXY_LOCATION: 'pihole'
+      # Set a password to access the web interface. Not setting one will result in a random password being assigned
+      FTLCONF_webserver_api_password: ''
+      FTLCONF_webserver_port: '8080'
+      FTLCONF_dns_upstreams: '127.0.0.1#5054'
+      FTLCONF_dhcp_active: 'true'
+      FTLCONF_dhcp_start: '192.168.1.11'
+      FTLCONF_dhcp_end: '192.168.1.254'
+      FTLCONF_dhcp_router: '192.168.1.1'
+    volumes:
+      # For persisting Pi-hole's databases and common configuration file
+      - './etc-pihole:/etc/pihole'
+      # Uncomment the below if you have custom dnsmasq config files that you want to persist. Not needed for most starting fresh with Pi-hole v6. If you're upgrading from v5 you and have used this directory before, you should keep it enabled for the first v6 container start to allow for a complete migration. It can be removed afterwards. Needs environment variable FTLCONF_misc_etc_dnsmasq_d: 'true'
+      - './etc-dnsmasq.d:/etc/dnsmasq.d'
+    cap_add:
+      # See https://github.com/pi-hole/docker-pi-hole#note-on-capabilities
+      # Required if you are using Pi-hole as your DHCP server, else not needed
+      - NET_ADMIN
+      # Optional, if Pi-hole should get some more processing time
+      - SYS_NICE
+    restart: unless-stopped
+  # Handles updating the DNS records for the domain
+  # and subdomains to the current IP address of the server
+  # This is used to keep the DNS records in sync with the server's IP address.
+  # To open services to the internet, you will need to open the ports on the router.
+  cloudflare-ddns:
+    image: timothyjmiller/cloudflare-ddns:latest
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - CF_DDNS_API_TOKEN=${CF_DDNS_API_TOKEN}
+    volumes:
+      - ./cloudflare-ddns.json:/config.json
+    restart: unless-stopped
+  # This is used to create a secure tunnel to the server.
+  # and expose the services to the internet without exposing the server's IP address.
+  # or needing to open ports on the router. This will work with any internet connection.
+  # and will not require any changes to the router or firewall.
+  cloudflare-tunnel:
+    image: cloudflare/cloudflared
+    hostname: reactrail.com
+    restart: always
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "10"
+    command: tunnel run
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+    environment:
+      - "TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}"
+    healthcheck:
+      test: ["CMD", "cloudflared", "--version"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    labels:
+      # enbale watchtower updates
+      - "com.centurylinklabs.watchtower.enable=true"
+  # DNS endpoint which supports DNS over HTTPS (DoH) and DNS over TLS (DoT).
+  # Provides a secure DNS resolver for pi-hole and other services on the network.
+  cloudflare-doh:
+    image: crazymax/cloudflared:latest
+    ports:
+      - target: 5054
+        published: 5054
+        protocol: udp
+      - target: 49313
+        published: 49313
+        protocol: tcp
+    environment:
+      - "TZ=Europe/Paris"
+      - "TUNNEL_DNS_UPSTREAM=https://1.1.1.1/dns-query,https://1.0.0.1/dns-query"
+      - "TUNNEL_DNS_PORT=5054"
+      - "TUNNEL_METRICS=0.0.0.0:49313"
+    restart: always
+
